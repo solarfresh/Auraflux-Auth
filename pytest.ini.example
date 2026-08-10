@@ -1,0 +1,7 @@
+[pytest]
+DJANGO_SETTINGS_MODULE = core.settings
+addopts = --cov=api/ --cov-report=html --reuse-db
+python_files = tests.py test_*.py *_tests.py
+pythonpath = api
+env =
+    DATABASE_URL=postgres://user:password@localhost:5432/test_db_name
