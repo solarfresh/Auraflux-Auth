@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  auth: &backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auraflux-auth:latest
+    container_name: auraflux_auth
+    # restart: always
+    command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000
+    volumes:
+      - ./api:/api
+    ports:
+      - "8001:8000"
+    env_file:
+      - ./docker-vars.env
+      - ./docker-vars.override.env
+    networks:
+      - auraflux_network
+
+  worker_auth:
+    <<: *backend
+    container_name: auraflux_worker_auth
+    env_file:
+      - ./docker-vars.env
+      - ./docker-vars.override.env
+    ports: []
+    volumes:
+      - ./api:/api
+    command: celery -A core.celery_app:celery_app worker -Q celery,default -c 2 -l info
+    networks:
+      - auraflux_network
+
+volumes:
+  auraflux_data:
+
+networks:
+  auraflux_network:
+    name: auraflux_network
+    external: true
