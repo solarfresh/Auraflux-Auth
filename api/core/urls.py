@@ -1,10 +1,13 @@
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from iam.views import JWKSView
+
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
-    # path('api/agents/', include('agents.urls')),
+    path('.well-known/jwks.json', JWKSView.as_view(), name='jwks'),
+    path('api/auth/', include('iam.urls')),
     path('api/users/', include('users.urls')),
 ]
 

@@ -1,8 +1,6 @@
 from adrf.views import APIView
 from django.conf import settings
 from django.contrib.auth import aauthenticate, get_user_model
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
@@ -12,7 +10,6 @@ from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.permissions import IsAdmin, IsSelfOrAdmin
 from users.serializers import UserSerializer
