@@ -2,6 +2,7 @@
 docker-compose.override.yml
 docker-vars.override.env
 pytest.ini
+keys/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

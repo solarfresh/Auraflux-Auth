@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'drf_spectacular_sidecar',
 
     # Local apps
+    'iam.apps.IAMConfig',
     'users.apps.UsersConfig',
 ]
 
@@ -120,11 +121,7 @@ ASGI_APPLICATION = 'core.asgi.application'
 WSGI_APPLICATION = 'core.wsgi.application'
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-]
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '127.0.0.1,localhost').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
 # Database configuration for PostgreSQL
@@ -200,7 +197,7 @@ AUTH_USER_MODEL = 'users.User'
 # Django Rest Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'auth.authentication.JWTCookieAuthentication',
+        'iam.authentication.JWTCookieAuthentication',
         # 'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -224,6 +221,9 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': False,
+    'ALGORITHM': 'RS256',
+    'SIGNING_KEY': open(os.environ.get('SIGNING_KEY_PATH', '')).read(),
+    'VERIFYING_KEY': open(os.environ.get('VERIFYING_KEY_PATH', '')).read(),
     'AUTH_COOKIE': 'jwt_access', # Name of the cookie for the access token
     'AUTH_COOKIE_REFRESH': 'jwt_refresh', # Name of the cookie for the refresh token
     'AUTH_COOKIE_DOMAIN': None, # Set to your domain in production (e.g., '.your-domain.com')

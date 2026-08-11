@@ -1,12 +1,33 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:17
+    container_name: auraflux_postgres
+    # restart: always
+    volumes:
+      - auraflux_data:/var/lib/postgresql/data/
+    env_file:
+      - ./docker-vars.env # Specify the path to the environment file to load
+      - ./docker-vars.override.env
+    ports:
+      - "5432:5432"
+    networks:
+      - auraflux_network
+
+  redis:
+    image: redis:8.0.5-alpine3.21
+    container_name: auraflux_redis
+    # restart: always
+    ports:
+      - "6379:6379" # Expose Redis port (optional, but useful for debugging)
+    networks:
+      - auraflux_network
+
   auth: &backend
     build:
       context: .
       dockerfile: Dockerfile
-    image: auraflux-auth:latest
-    container_name: auraflux_auth
+    image: auraflux-auth-backend:latest
+    container_name: auraflux_auth_backend
     # restart: always
     command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000
     volumes:

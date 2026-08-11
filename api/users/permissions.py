@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 # Get the custom user model with the 'Role' attribute
 User = get_user_model()
 
+
 class IsAdmin(permissions.BasePermission):
     """
     Allows access only to admin users.
