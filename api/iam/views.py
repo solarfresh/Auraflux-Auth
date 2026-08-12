@@ -53,8 +53,8 @@ class ClientCredentialsTokenView(APIView):
 
         return Response({
             'access_token': str(token),
-            'expires_in': 900,
-            'token_type': 'Bearer'
+            'expiresIn': 900,
+            'tokenType': 'Bearer'
         })
 
 
@@ -104,7 +104,7 @@ class TokenExchangeView(APIView):
 
     async def post(self, request):
         user = request.user
-        target_service_id = request.data.get('target_service')
+        target_service_id = request.data.get('service')
         if not target_service_id:
             return Response({'error': 'target_service is required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -119,13 +119,13 @@ class TokenExchangeView(APIView):
             return Response({'error': 'Permission denied for this service'}, status=status.HTTP_403_FORBIDDEN)
 
         token = AccessToken.for_user(user)
-        token['user_id'] = user.id
+        token['userId'] = user.id
         token['aud'] = service.client_id
         token['scope'] = user_perm.scopes
 
         return Response({
-            'access_token': str(token),
-            'expires_in': 900
+            'token': str(token),
+            'expiresIn': 900
         })
 
 
