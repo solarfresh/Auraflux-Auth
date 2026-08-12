@@ -231,6 +231,7 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_HTTP_ONLY': True, # Prevents client-side JavaScript from accessing the cookie
     'AUTH_COOKIE_SAMESITE': 'Lax', # Set to 'Strict' or 'Lax' to protect against CSRF
 }
+ACCESS_TOKEN_KID = os.environ.get('ACCESS_TOKEN_KID', 'auth-system-master-key')
 
 # Initial admin user settings
 # These settings can be overridden by environment variables for security.

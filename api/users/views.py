@@ -4,18 +4,14 @@ from django.contrib.auth import aauthenticate, get_user_model
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
-from users.permissions import IsAdmin, IsSelfOrAdmin
 from users.serializers import UserSerializer
 
 from .serializers import LoginRequestSerializer, LoginResponseSerializer
-from .utils import get_refreshed_tokens_sync
 
 User = get_user_model()
 
@@ -99,54 +95,6 @@ class LoginView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# @method_decorator(csrf_exempt, name='dispatch') # Apply csrf_exempt to the view
-class RefreshTokenView(APIView):
-    # 🎯 The essential fix: allow the request to bypass standard authentication
-    permission_classes = [AllowAny]
-
-    # FIX: Explicitly disable all authentication classes for this view.
-    # This overrides the global DEFAULT_AUTHENTICATION_CLASSES setting.
-    authentication_classes = []
-
-    async def post(self, request):
-        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
-
-        if not refresh_token:
-            raise AuthenticationFailed('Refresh token is missing.')
-
-        try:
-            new_access_token, new_refresh_token = await get_refreshed_tokens_sync(refresh_token)
-
-            # Prepare the response and set the new access token cookie
-            response = Response({'message': 'Access token refreshed.'}, status=status.HTTP_200_OK)
-            response.set_cookie(
-                key=str(settings.SIMPLE_JWT['AUTH_COOKIE']),
-                value=str(new_access_token),
-                expires=str(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']),
-                secure=bool(settings.SIMPLE_JWT['AUTH_COOKIE_SECURE']),
-                httponly=bool(settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY']),
-                samesite=str(settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'])
-            )
-
-            if new_refresh_token:
-                response.set_cookie(
-                    key=str(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']),
-                    value=str(new_refresh_token),
-                    expires=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
-                    secure=bool(settings.SIMPLE_JWT['AUTH_COOKIE_SECURE']),
-                    httponly=bool(settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY']),
-                    samesite=str(settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'])
-                )
-
-            return response
-
-        except AuthenticationFailed as e:
-            # Re-raise authentication failures unchanged
-            raise
-        except Exception as e:
-            raise AuthenticationFailed('Refresh token is invalid or expired.')
-
-
 class UserCreateView(CreateModelMixin, GenericAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -197,21 +145,3 @@ class UserStatusView(APIView):
             serializer.data,
             status=status.HTTP_200_OK
         )
-
-
-class UserViewSet(ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-
-    def get_permissions(self):
-        # Use different permissions based on the action
-        if self.action == 'list':
-            # Only admins can view the list of all users
-            permission_classes = [IsAdmin]
-        elif self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            # For specific user objects, allow admins or the user themselves
-            permission_classes = [IsSelfOrAdmin]
-        else:
-            # For other actions (like 'create'), allow any authenticated user
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]

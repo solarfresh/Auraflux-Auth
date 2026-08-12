@@ -1,16 +1,23 @@
 import os
+import uuid
 from pathlib import Path
+import jwt
+from datetime import datetime, timezone, timedelta
 
 from adrf.views import APIView
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from drf_spectacular.utils import extend_schema, inline_serializer
 from iam.models import TargetService, UserServicePermission
+from iam.utils import get_refreshed_tokens_sync
 from jose import jwk
 from rest_framework import serializers, status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import AccessToken
 from users.permissions import IsAdmin
+from rest_framework_simplejwt.settings import api_settings
 
 
 class ClientCredentialsTokenView(APIView):
@@ -46,15 +53,30 @@ class ClientCredentialsTokenView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # 3. Issue short-lived Access Token
-        token = AccessToken()
-        token['aud'] = service.client_id
-        token['scope'] = [f"{service.client_id}:access"]
+        access_token_lifetime = api_settings.ACCESS_TOKEN_LIFETIME
+        if not isinstance(access_token_lifetime, timedelta):
+            access_token_lifetime = timedelta(minutes=5)
+
+        now = datetime.now(timezone.utc)
+        expire = now + access_token_lifetime
+        payload = {
+            'token_type': 'Bearer',
+            'exp': expire,
+            'iat': now,
+            'jti': str(uuid.uuid4()),
+            'aud': service.client_id,
+            'scope': [f"{service.client_id}:access"],
+        }
+
+        encoded_token = jwt.encode(
+            payload=payload,
+            key=str(api_settings.SIGNING_KEY),
+            algorithm=str(api_settings.ALGORITHM),
+            headers={'kid': settings.ACCESS_TOKEN_KID}
+        )
 
         return Response({
-            'access_token': str(token),
-            'expiresIn': 900,
-            'tokenType': 'Bearer'
+            'access_token': str(encoded_token),
         })
 
 
@@ -79,7 +101,7 @@ class JWKSView(APIView):
             jwk_key = jwk.construct(pem_key, algorithm='RS256').to_dict()
             jwk_key['use'] = 'sig'
             jwk_key['alg'] = 'RS256'
-            jwk_key['kid'] = 'auth-system-master-key'
+            jwk_key['kid'] = settings.ACCESS_TOKEN_KID
 
             cls._cached_jwk = jwk_key
 
@@ -99,7 +121,56 @@ class JWKSView(APIView):
         })
 
 
+# @method_decorator(csrf_exempt, name='dispatch') # Apply csrf_exempt to the view
+class RefreshTokenView(APIView):
+    # 🎯 The essential fix: allow the request to bypass standard authentication
+    permission_classes = [AllowAny]
+
+    # FIX: Explicitly disable all authentication classes for this view.
+    # This overrides the global DEFAULT_AUTHENTICATION_CLASSES setting.
+    authentication_classes = []
+
+    async def post(self, request):
+        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
+
+        if not refresh_token:
+            raise AuthenticationFailed('Refresh token is missing.')
+
+        try:
+            new_access_token, new_refresh_token = await get_refreshed_tokens_sync(refresh_token)
+
+            # Prepare the response and set the new access token cookie
+            response = Response({'message': 'Access token refreshed.'}, status=status.HTTP_200_OK)
+            response.set_cookie(
+                key=str(settings.SIMPLE_JWT['AUTH_COOKIE']),
+                value=str(new_access_token),
+                expires=str(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']),
+                secure=bool(settings.SIMPLE_JWT['AUTH_COOKIE_SECURE']),
+                httponly=bool(settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY']),
+                samesite=str(settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'])
+            )
+
+            if new_refresh_token:
+                response.set_cookie(
+                    key=str(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']),
+                    value=str(new_refresh_token),
+                    expires=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
+                    secure=bool(settings.SIMPLE_JWT['AUTH_COOKIE_SECURE']),
+                    httponly=bool(settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY']),
+                    samesite=str(settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'])
+                )
+
+            return response
+
+        except AuthenticationFailed as e:
+            # Re-raise authentication failures unchanged
+            raise
+        except Exception as e:
+            raise AuthenticationFailed('Refresh token is invalid or expired.')
+
+
 class TokenExchangeView(APIView):
+
     permission_classes = [IsAuthenticated]
 
     async def post(self, request):
@@ -118,14 +189,31 @@ class TokenExchangeView(APIView):
         except UserServicePermission.DoesNotExist:
             return Response({'error': 'Permission denied for this service'}, status=status.HTTP_403_FORBIDDEN)
 
-        token = AccessToken.for_user(user)
-        token['userId'] = user.id
-        token['aud'] = service.client_id
-        token['scope'] = user_perm.scopes
+        access_token_lifetime = api_settings.ACCESS_TOKEN_LIFETIME
+        if not isinstance(access_token_lifetime, timedelta):
+            access_token_lifetime = timedelta(minutes=5)
+
+        now = datetime.now(timezone.utc)
+        expire = now + access_token_lifetime
+        payload = {
+            'token_type': 'Bearer',
+            'exp': expire,
+            'iat': now,
+            'jti': str(uuid.uuid4()),
+            'userId': str(user.id),
+            'aud': service.client_id,
+            'scope': user_perm.scopes,
+        }
+
+        encoded_token = jwt.encode(
+            payload=payload,
+            key=str(api_settings.SIGNING_KEY),
+            algorithm=str(api_settings.ALGORITHM),
+            headers={'kid': settings.ACCESS_TOKEN_KID}
+        )
 
         return Response({
-            'token': str(token),
-            'expiresIn': 900
+            'token': str(encoded_token),
         })
 
 
