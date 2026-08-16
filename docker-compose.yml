@@ -49,7 +49,7 @@ services:
     ports: []
     volumes:
       - ./api:/api
-    command: celery -A core.celery_app:celery_app worker -Q celery,default -c 2 -l info
+    command: celery -A core.celery_app:celery_app worker -Q celery,iam -c 2 -l info
     networks:
       - auraflux_network
 

@@ -1,8 +1,7 @@
 class Queue:
-    DEFAULT = 'default'
-    STREAM = 'stream'
+    IAM = 'iam'
 
 
 class UpdateModelFamilies:
     name = "update_model_families"
-    queue = Queue.DEFAULT
+    queue = Queue.IAM

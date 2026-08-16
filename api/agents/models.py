@@ -51,7 +51,7 @@ class ModelProvider(BaseModel):
         blank=True
     )
 
-    service = models.ForeignKey(
+    client = models.ForeignKey(
         'iam.TargetService',
         related_name='model_providers',
         to_field='client_id',

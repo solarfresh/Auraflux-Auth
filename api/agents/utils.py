@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from asgiref.sync import async_to_sync
@@ -8,6 +8,19 @@ from auraflux_core.core.schemas.clients import ClientConfig, ProviderConfig
 
 logger = logging.getLogger(__name__)
 
+_GLOBAL_CLIENT_MANAGER: Optional[Any] = None
+
+def get_global_client_manager() -> Any:
+    """Retrieves the initialized ClientManager instance."""
+    if _GLOBAL_CLIENT_MANAGER is None:
+        logger.warning("ClientManager has not been initialized. Check agents/apps.py ready() method.")
+
+    return _GLOBAL_CLIENT_MANAGER
+
+def set_global_client_manager(client_manager: Any):
+    """Sets the initialized ClientManager instance."""
+    global _GLOBAL_CLIENT_MANAGER
+    _GLOBAL_CLIENT_MANAGER = client_manager
 
 def get_provider_configs() -> List:
     from agents.models import ModelProvider
@@ -30,19 +43,24 @@ def measure_model_provider_connection(provider_type: str, api_key: str, provider
         logger.warning("Model class not provided for measuring model provider connection. Defaulting to ModelProvider.")
         return
 
-    if provider_id:
+    client_manager = get_global_client_manager()
+    if not provider_id or client_manager is None:
+        provider_id = str(uuid4())
+        provider_config = ProviderConfig(id=provider_id, name='test', provider_type=provider_type, api_key=api_key)
+        client_config = ClientConfig(models=[provider_config])
+        client_manager = ClientManager(client_config)
+        async_to_sync(client_manager.initialize)()
+    else:
         model_provider = model_class.objects.get(id=provider_id)
-        provider_config = [ProviderConfig(
+        provider_config = ProviderConfig(
             id=provider_id,
             provider_type=provider_type.upper(),
             api_key=model_provider.get_api_key()
-        )]
-    else:
-        provider_id = str(uuid4())
-        provider_config = [ProviderConfig(id=provider_id, name='test', provider_type=provider_type, api_key=api_key)]
+        )
+        client_config = ClientConfig(models=[provider_config])
+        client_manager = ClientManager(client_config)
+        async_to_sync(client_manager.initialize)()
+        set_global_client_manager(client_manager)
 
-    client_config = ClientConfig(models=provider_config)
-    client_manager = ClientManager(client_config)
-    async_to_sync(client_manager.instantiate_handlers)()
-
+    client_manager.instantiate_handler_by_config(provider_config)
     return client_manager.get_available_models(provider_id=provider_id)

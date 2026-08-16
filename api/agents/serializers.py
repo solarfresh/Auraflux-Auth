@@ -1,6 +1,10 @@
+import logging
+
 from adrf.serializers import ModelSerializer
 from agents.models import ModelFamilies, ModelProvider
 from rest_framework import serializers
+
+logger = logging.getLogger(__name__)
 
 
 class ModelFamiliesSerializer(ModelSerializer):
@@ -15,8 +19,9 @@ class ModelProviderSerializer(ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     type = serializers.CharField(source='provider_type')
+    clientId = serializers.CharField(source='client_id')
     baseUrl = serializers.URLField(source='base_url', required=False, allow_blank=True)
-    latencyMs = serializers.IntegerField(source='latency_ms')
+    latencyMs = serializers.IntegerField(source='latency_ms', default=999)
     lastVerifiedAt = serializers.DateTimeField(source='last_verified_at')
     apiKeyFingerprint = serializers.ReadOnlyField(source='api_key_fingerprint')
     apiKey = serializers.CharField(
@@ -31,7 +36,7 @@ class ModelProviderSerializer(ModelSerializer):
     class Meta:
         model = ModelProvider
         fields = [
-            'id', 'name', 'type', 'apiKey', 'apiKeyFingerprint',
+            'id', 'name', 'type', 'clientId', 'apiKey', 'apiKeyFingerprint',
             'baseUrl', 'status', 'user', 'latencyMs', 'lastVerifiedAt',
             'supportedFamilies', 'createdAt', 'updatedAt'
         ]
