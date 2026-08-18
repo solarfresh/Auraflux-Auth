@@ -37,5 +37,5 @@ def update_model_families(event_type: str, payload: dict):
             output_token_limit=model['output_token_limit']
         )
 
-        if created:
+        if not model_provider.supported_families.filter(id=family.id).exists():
             model_provider.supported_families.add(family)

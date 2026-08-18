@@ -19,7 +19,6 @@ class ModelProviderSerializer(ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     type = serializers.CharField(source='provider_type')
-    clientId = serializers.CharField(source='client_id')
     baseUrl = serializers.URLField(source='base_url', required=False, allow_blank=True)
     latencyMs = serializers.IntegerField(source='latency_ms', default=999)
     lastVerifiedAt = serializers.DateTimeField(source='last_verified_at')
@@ -36,7 +35,7 @@ class ModelProviderSerializer(ModelSerializer):
     class Meta:
         model = ModelProvider
         fields = [
-            'id', 'name', 'type', 'clientId', 'apiKey', 'apiKeyFingerprint',
+            'id', 'name', 'type', 'apiKey', 'apiKeyFingerprint',
             'baseUrl', 'status', 'user', 'latencyMs', 'lastVerifiedAt',
             'supportedFamilies', 'createdAt', 'updatedAt'
         ]

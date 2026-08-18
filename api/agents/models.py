@@ -51,14 +51,6 @@ class ModelProvider(BaseModel):
         blank=True
     )
 
-    client = models.ForeignKey(
-        'iam.TargetService',
-        related_name='model_providers',
-        to_field='client_id',
-        on_delete=models.CASCADE,
-        db_column='client_id'
-    )
-
     class Meta:
         ordering = ['-created_at']
 
