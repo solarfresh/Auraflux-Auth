@@ -13,6 +13,7 @@ PACKAGE_LIST = [
     'agents',
     'iam',
     'messaging',
+    'services',
     'users'
 ]
 

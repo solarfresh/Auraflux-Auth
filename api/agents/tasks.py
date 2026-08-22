@@ -3,9 +3,10 @@ import logging
 from core.celery_app import celery_app
 from messaging.constants import AgentRequest, UpdateModelFamilies
 from messaging.tasks import publish_event
+from services.distributed_semaphore import acquire_concurrency_slot
 
 from .models import ModelFamilies, ModelProvider
-from .utils import measure_model_provider_connection, get_agent_response
+from .utils import get_agent_response, measure_model_provider_connection
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ def handle_agent_request(event_type: str, payload: dict):
     This task is designed to be flexible and reusable for any agent defined in the system. It takes in a payload that specifies which agent to execute, the input data for that agent, and optionally the format of the output and the next event to publish.
     Args:
         payload: A dictionary containing the necessary information to execute the agent, including:
+            - provider_id: The ID of the model provider to use for the agent.
             - agent_name: The name of the agent instance.
             - agent_role: The role of the agent (e.g., 'assistant', 'researcher
             - system_prompt: The system prompt to initialize the agent with.
@@ -32,15 +34,20 @@ def handle_agent_request(event_type: str, payload: dict):
     """
 
     task_id = handle_agent_request.request.id
+    provider_id = payload.get('provider_id', None)
     agent_role = payload.get('agent_role', 'unknown')
     next_event_type = payload.get('next_event_type', None)
     next_event_payload = payload.get('next_event_payload', {})
     next_event_queue = payload.get('next_event_queue', None)
 
+    if provider_id is None:
+        raise ValueError("Provider ID is required in the payload.")
+
     logger.info("Task %s: Handling agent request for agent role %s.", task_id, agent_role)
 
     try:
-        agent_output = get_agent_response(**payload)
+        with acquire_concurrency_slot(key_prefix=provider_id, max_concurrency=1, timeout=60):
+            agent_output = get_agent_response(**payload)
     except Exception:
         logger.critical("Task %s: Agent execution failed for agent role %s.", task_id, agent_role)
         return
