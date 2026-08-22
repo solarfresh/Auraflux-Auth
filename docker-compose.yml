@@ -53,6 +53,19 @@ services:
     networks:
       - auraflux_network
 
+  worker_agent:
+    <<: *backend
+    container_name: auraflux_worker_agent
+    env_file:
+      - ./docker-vars.env
+      - ./docker-vars.override.env
+    ports: []
+    volumes:
+      - ./api:/api
+    command: celery -A core.celery_app:celery_app worker -Q agent -c 2 -l info
+    networks:
+      - auraflux_network
+
 volumes:
   auraflux_data:
 
