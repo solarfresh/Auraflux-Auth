@@ -3,7 +3,7 @@ import logging
 from core.celery_app import celery_app
 from messaging.constants import AgentRequest, UpdateModelFamilies
 from messaging.tasks import publish_event
-from services.distributed_semaphore import acquire_concurrency_slot
+from services.semaphore import acquire_concurrency_slot
 
 from .models import ModelFamilies, ModelProvider
 from .utils import get_agent_response, measure_model_provider_connection

@@ -1,6 +1,5 @@
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 from asgiref.sync import async_to_sync
@@ -75,7 +74,8 @@ def get_agent_instance(
     agent_name: str,
     agent_role: str,
     system_prompt: str,
-    llm_parameters: Dict
+    llm_parameters: Dict,
+    output_format: Literal['TEXT', 'JSON']
 ) -> Agent:
     """
     Retrieves an instance of the specified agent role, along with its configuration.
@@ -85,6 +85,7 @@ def get_agent_instance(
         agent_role: The role of the agent (e.g., 'assistant', 'researcher', etc.).
         system_prompt: The system prompt to initialize the agent with.
         llm_parameters: Parameters for configuring the LLM.
+        output_format: The desired output format for the agent's response ('TEXT' or 'JSON').
     """
 
     try:
@@ -95,6 +96,7 @@ def get_agent_instance(
         agent_config = {
             "name": agent_name,
             "system_message": system_prompt,
+            "output_format": output_format,
             **llm_parameters
         }
 
@@ -119,7 +121,7 @@ def get_agent_response(
     template_variables: Dict[str, Any],
     prompt_text=None,
     tool_args_map: dict | None = None,
-    output_format: str = 'text',
+    output_format: Literal['TEXT', 'JSON'] = 'TEXT',
     **kwargs
 ) -> Any:
     """
@@ -135,13 +137,19 @@ def get_agent_response(
         template_variables: Mapping of variable names to their corresponding values for prompt rendering.
         prompt_text: Direct prompt text to send to the agent.
         tool_args_map: Optional mapping of tool names to their arguments for dynamic tool configuration.
-        output_format: Desired output format ('text' or 'json').
+        output_format: The desired output format for the agent's response ('TEXT' or 'JSON').
     """
 
     if prompt_text is None and agent_input_data is None:
         raise ValueError("Either prompt_text or agent_input_data must be provided.")
 
-    agent = get_agent_instance(agent_name, agent_role, system_prompt, llm_parameters)
+    agent = get_agent_instance(
+        agent_name,
+        agent_role,
+        system_prompt,
+        llm_parameters,
+        output_format=output_format
+    )
 
     if prompt_text is not None:
         prompt = prompt_text
@@ -156,13 +164,7 @@ def get_agent_response(
             tool_args_map=tool_args_map
         )
 
-        if output_format == 'json':
-            return json.loads(message.content.replace('```json', '').replace('```', '').strip())
-        elif output_format == 'text':
-            return message.content
-        else:
-            raise ValueError(f"Unsupported output format: {output_format}")
-
+        return message.content
     except Exception as e:
         raise e
 
