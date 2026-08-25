@@ -7,6 +7,7 @@ from iam.views import JWKSView
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('.well-known/jwks.json', JWKSView.as_view(), name='jwks'),
+    path('api/agents/', include('agents.urls')),
     path('api/iam/', include('iam.urls')),
     path('api/users/', include('users.urls')),
 ]
