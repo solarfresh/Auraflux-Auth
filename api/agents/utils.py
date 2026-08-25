@@ -75,7 +75,8 @@ def get_agent_instance(
     agent_role: str,
     system_prompt: str,
     llm_parameters: Dict,
-    output_format: Literal['TEXT', 'JSON']
+    output_format: Literal['TEXT', 'JSON'],
+    **kwargs
 ) -> Agent:
     """
     Retrieves an instance of the specified agent role, along with its configuration.
