@@ -1,12 +1,14 @@
 import logging
 
 from core.celery_app import celery_app
-from messaging.constants import AgentRequest, UpdateModelFamilies
+from messaging.constants import (AgentRequest, EmbeddingRequest,
+                                 UpdateModelFamilies)
 from messaging.tasks import publish_event
 from services.semaphore import acquire_concurrency_slot
 
 from .models import ModelFamilies, ModelProvider
-from .utils import get_agent_response, measure_model_provider_connection
+from .utils import (get_agent_response, get_embedding_response,
+                    measure_model_provider_connection)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,53 @@ def handle_agent_request(event_type: str, payload: dict):
     if next_event_type and next_event_type is not None:
         next_event_payload.update({
             'agent_output': agent_output
+        })
+        publish_event.delay(
+            event_type=next_event_type,
+            payload=next_event_payload,
+            queue=next_event_queue if next_event_queue else 'default'
+        )
+
+@celery_app.task(name=EmbeddingRequest.name, ignore_result=True)
+def handle_embedding_request(event_type: str, payload: dict):
+    """
+    Generic consumer task for handling vector embedding requests.
+
+    Args:
+        event_type: The type of event being handled.
+        payload: A dictionary containing execution parameters, including:
+            - provider_id: The ID of the model provider to acquire concurrency slots.
+            - provider: The provider name (e.g., 'openai', 'gemini').
+            - model: The target embedding model identifier.
+            - embedding_name: Display name or identifier for the configuration.
+            - input_text: Single string or list of strings to generate embeddings for.
+            - parameters: Optional runtime model parameters.
+            - next_event_type: Optional event type to publish after generating embeddings.
+            - next_event_payload: Optional base dictionary for the next event payload.
+            - next_event_queue: Optional queue name for the next event.
+    """
+    task_id = handle_embedding_request.request.id
+    provider_id = payload.get('provider_id', None)
+    embedding_name = payload.get('embedding_name', 'unknown')
+    next_event_type = payload.get('next_event_type', None)
+    next_event_payload = payload.get('next_event_payload', {})
+    next_event_queue = payload.get('next_event_queue', None)
+
+    if provider_id is None:
+        raise ValueError("Provider ID is required in the payload.")
+
+    logger.info("Task %s: Handling embedding request for %s.", task_id, embedding_name)
+
+    try:
+        with acquire_concurrency_slot(key_prefix=provider_id, max_concurrency=1, timeout=60):
+            embedding_output = get_embedding_response(**payload)
+    except Exception:
+        logger.critical("Task %s: Embedding execution failed for %s.", task_id, embedding_name)
+        return
+
+    if next_event_type:
+        next_event_payload.update({
+            'embedding_output': embedding_output
         })
         publish_event.delay(
             event_type=next_event_type,
