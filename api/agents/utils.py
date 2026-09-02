@@ -172,6 +172,7 @@ def get_agent_response(
 
 def get_embedding_instance(
     embedding_name: str,
+    embedding_role: str,
     provider_id: str,
     model_family_id: str,
     parameters: Dict[str, Any],
@@ -199,10 +200,7 @@ def get_embedding_instance(
             **kwargs,
         }
 
-        embedding_registry = EMBEDDING_REGISTRY.get(
-            model_family_id, EMBEDDING_REGISTRY.get('default')
-        )
-
+        embedding_registry = EMBEDDING_REGISTRY[embedding_role] if embedding_role in EMBEDDING_REGISTRY else EMBEDDING_REGISTRY['default']
         if not embedding_registry:
             raise KeyError(f"No embedding registry found for model family: {model_family_id}")
 
@@ -222,6 +220,7 @@ def get_embedding_instance(
 
 def get_embedding_response(
     embedding_name: str,
+    embedding_role: str,
     provider: str,
     model: str,
     parameters: Dict[str, Any] | None = None,
@@ -247,6 +246,7 @@ def get_embedding_response(
     # 1. Retrieve the GenericEmbedding instance
     embedding_instance = get_embedding_instance(
         embedding_name=embedding_name,
+        embedding_role=embedding_role,
         provider=provider,
         model=model,
         parameters=parameters or {},
