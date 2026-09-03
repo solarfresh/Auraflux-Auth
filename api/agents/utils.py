@@ -173,8 +173,6 @@ def get_agent_response(
 def get_embedding_instance(
     embedding_name: str,
     embedding_role: str,
-    provider_id: str,
-    model_family_id: str,
     parameters: Dict[str, Any],
     **kwargs
 ) -> Any:
@@ -183,8 +181,7 @@ def get_embedding_instance(
 
     Args:
         embedding_name: The name or identifier of the embedding instance.
-        provider_id: UUID or identifier of the LLM provider for embeddings.
-        model_family_id: UUID or identifier of the target embedding model family.
+        embedding_role: The role of the embedding (e.g., 'text-embedding', 'image-embedding').
         parameters: Runtime parameters (e.g., dimensions, batch_size, normalize_embeddings).
     """
     try:
@@ -194,15 +191,13 @@ def get_embedding_instance(
 
         embedding_config = {
             "name": embedding_name,
-            "provider_id": str(provider_id),
-            "model_family_id": str(model_family_id),
             **parameters,
             **kwargs,
         }
 
         embedding_registry = EMBEDDING_REGISTRY[embedding_role] if embedding_role in EMBEDDING_REGISTRY else EMBEDDING_REGISTRY['default']
         if not embedding_registry:
-            raise KeyError(f"No embedding registry found for model family: {model_family_id}")
+            raise KeyError(f"No embedding registry found for role '{embedding_role}'.")
 
         instance = embedding_registry.embedding_class(
             config=embedding_registry.config_class(**embedding_config),
@@ -213,32 +208,21 @@ def get_embedding_instance(
 
     except Exception as e:
         logger.critical(
-            "Failed to create embedding instance '%s' (Provider: %s, Family: %s): %s",
-            embedding_name, provider_id, model_family_id, str(e)
+            "Failed to create embedding instance '%s' for role '%s': %s", embedding_name, embedding_role, str(e)
         )
         raise e
 
 def get_embedding_response(
     embedding_name: str,
     embedding_role: str,
-    provider: str,
-    model: str,
     parameters: Dict[str, Any] | None = None,
     input_text: Union[str, List[str]] | None = None,
+    use_batch: bool = True,  # Strategy flag to toggle batch processing
     **kwargs
 ) -> Union[List[float], List[List[float]]]:
     """
     Generates embedding vectors for either a single query string or a batch of text documents.
-
-    Args:
-        embedding_name: The display name or identifier for the embedding configuration.
-        provider: The provider identifier (e.g., 'openai', 'gemini').
-        model: The target embedding model identifier.
-        parameters: Optional runtime model parameters.
-        input_text: Direct input string or list of strings to be vectorized.
-
-    Returns:
-        Union[List[float], List[List[float]]]: Single vector or list of vectors depending on input type.
+    Handles both batch and sequential (single) execution strategies.
     """
     if not input_text:
         raise ValueError("input_text must be provided and cannot be empty.")
@@ -247,27 +231,38 @@ def get_embedding_response(
     embedding_instance = get_embedding_instance(
         embedding_name=embedding_name,
         embedding_role=embedding_role,
-        provider=provider,
-        model=model,
         parameters=parameters or {},
         **kwargs
     )
 
-    # 3. Dispatch to appropriate GenericEmbedding method based on input structure
     try:
-        if isinstance(input_text, list):
-            # Batch document processing using embed_documents
-            embeddings = async_to_sync(embedding_instance.embed_documents)(texts=input_text)
-        else:
-            # Single query processing using embed_query
-            embeddings = async_to_sync(embedding_instance.embed_query)(text=input_text)
+        # Handle single text input
+        if isinstance(input_text, str):
+            return async_to_sync(embedding_instance.embed_query)(text=input_text)
 
-        return embeddings
+        # Handle list of texts (Batch vs. Single Sequential Processing)
+        if isinstance(input_text, list):
+            # Attempt batch processing if supported and enabled
+            if use_batch:
+                try:
+                    return async_to_sync(embedding_instance.embed_documents)(texts=input_text)
+                except Exception as batch_err:
+                    logger.warning(
+                        f"Batch embedding failed ({str(batch_err)}). "
+                        "Falling back to sequential single-query processing."
+                    )
+                    # Fallback to single sequential processing below
+
+            # Sequential single-query processing (for free tier or rate-limit fallback)
+            embeddings = []
+            for text in input_text:
+                vec = async_to_sync(embedding_instance.embed_query)(text=text)
+                embeddings.append(vec)
+            return embeddings
 
     except Exception as e:
         logger.error(
-            "Failed to generate embedding for instance '%s' (Provider: %s, Model: %s): %s",
-            embedding_name, provider, model, str(e)
+            "Failed to generate embedding for instance '%s' with role '%s': %s", embedding_name, embedding_role, str(e)
         )
         raise e
 
