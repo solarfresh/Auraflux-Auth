@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import uuid4
 
 from asgiref.sync import async_to_sync
@@ -7,6 +7,7 @@ from auraflux_core.agents import AGENT_REGISTRY, Agent
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.schemas.clients import ClientConfig, ProviderConfig
 from auraflux_core.core.schemas.messages import Message
+from auraflux_core.embeddings import EMBEDDING_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,102 @@ def get_agent_response(
 
         return message.content
     except Exception as e:
+        raise e
+
+def get_embedding_instance(
+    embedding_name: str,
+    embedding_role: str,
+    parameters: Dict[str, Any],
+    **kwargs
+) -> Any:
+    """
+    Retrieves an instance of the specified embedding model client, along with its configuration.
+
+    Args:
+        embedding_name: The name or identifier of the embedding instance.
+        embedding_role: The role of the embedding (e.g., 'text-embedding', 'image-embedding').
+        parameters: Runtime parameters (e.g., dimensions, batch_size, normalize_embeddings).
+    """
+    try:
+        client_manager = get_global_client_manager()
+        if client_manager is None:
+            raise RuntimeError("ClientManager is not initialized.")
+
+        embedding_config = {
+            "name": embedding_name,
+            **parameters,
+            **kwargs,
+        }
+
+        embedding_registry = EMBEDDING_REGISTRY[embedding_role] if embedding_role in EMBEDDING_REGISTRY else EMBEDDING_REGISTRY['default']
+        if not embedding_registry:
+            raise KeyError(f"No embedding registry found for role '{embedding_role}'.")
+
+        instance = embedding_registry.embedding_class(
+            config=embedding_registry.config_class(**embedding_config),
+            client_manager=client_manager
+        )
+
+        return instance
+
+    except Exception as e:
+        logger.critical(
+            "Failed to create embedding instance '%s' for role '%s': %s", embedding_name, embedding_role, str(e)
+        )
+        raise e
+
+def get_embedding_response(
+    embedding_name: str,
+    embedding_role: str,
+    parameters: Dict[str, Any] | None = None,
+    input_text: Union[str, List[str]] | None = None,
+    use_batch: bool = True,  # Strategy flag to toggle batch processing
+    **kwargs
+) -> Union[List[float], List[List[float]]]:
+    """
+    Generates embedding vectors for either a single query string or a batch of text documents.
+    Handles both batch and sequential (single) execution strategies.
+    """
+    if not input_text:
+        raise ValueError("input_text must be provided and cannot be empty.")
+
+    # 1. Retrieve the GenericEmbedding instance
+    embedding_instance = get_embedding_instance(
+        embedding_name=embedding_name,
+        embedding_role=embedding_role,
+        parameters=parameters or {},
+        **kwargs
+    )
+
+    try:
+        # Handle single text input
+        if isinstance(input_text, str):
+            return async_to_sync(embedding_instance.embed_query)(text=input_text)
+
+        # Handle list of texts (Batch vs. Single Sequential Processing)
+        if isinstance(input_text, list):
+            # Attempt batch processing if supported and enabled
+            if use_batch:
+                try:
+                    return async_to_sync(embedding_instance.embed_documents)(texts=input_text)
+                except Exception as batch_err:
+                    logger.warning(
+                        f"Batch embedding failed ({str(batch_err)}). "
+                        "Falling back to sequential single-query processing."
+                    )
+                    # Fallback to single sequential processing below
+
+            # Sequential single-query processing (for free tier or rate-limit fallback)
+            embeddings = []
+            for text in input_text:
+                vec = async_to_sync(embedding_instance.embed_query)(text=text)
+                embeddings.append(vec)
+            return embeddings
+
+    except Exception as e:
+        logger.error(
+            "Failed to generate embedding for instance '%s' with role '%s': %s", embedding_name, embedding_role, str(e)
+        )
         raise e
 
 def get_provider_configs() -> List:

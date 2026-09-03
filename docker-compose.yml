@@ -13,6 +13,37 @@ services:
     networks:
       - auraflux_network
 
+  opensearch-node:
+    image: opensearchproject/opensearch:3.8.0
+    container_name: auraflux_opensearch
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node
+      - discovery.type=single-node
+      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+      - knn.memory.circuit_breaker.limit=50%
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 2048M
+    ports:
+      - "9200:9200"
+    networks:
+      - auraflux_network
+
   redis:
     image: redis:8.0.5-alpine3.21
     container_name: auraflux_redis
