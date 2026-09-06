@@ -53,7 +53,7 @@ def handle_agent_request(event_type: str, payload: dict):
             agent_output = get_agent_response(**payload)
     except Exception:
         logger.critical("Task %s: Agent execution failed for agent role %s.", task_id, agent_role)
-        return
+        agent_output = None
 
     if next_event_type and next_event_type is not None:
         next_event_payload.update({
@@ -100,7 +100,7 @@ def handle_embedding_request(event_type: str, payload: dict):
             embedding_output = get_embedding_response(**payload)
     except Exception:
         logger.critical("Task %s: Embedding execution failed for %s.", task_id, embedding_name)
-        return
+        embedding_output = None
 
     if next_event_type:
         next_event_payload.update({
