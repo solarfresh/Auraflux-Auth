@@ -122,7 +122,6 @@ def get_agent_response(
     prompt_template: str,
     template_variables: Dict[str, Any],
     prompt_text=None,
-    tool_args_map: dict | None = None,
     output_format: Literal['TEXT', 'JSON'] = 'TEXT',
     **kwargs
 ) -> Any:
@@ -163,7 +162,6 @@ def get_agent_response(
     try:
         message = async_to_sync(agent.generate)(
             messages=[Message(role="user", content=prompt, name='User')],
-            tool_args_map=tool_args_map
         )
 
         return message.content
