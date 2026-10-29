@@ -1,3 +1,7 @@
+# ZooCode
+.roomodes
+.roo/
+
 # Application specific
 docker-compose.override.yml
 docker-vars.override.env

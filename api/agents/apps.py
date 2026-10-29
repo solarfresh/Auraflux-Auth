@@ -6,6 +6,8 @@ from auraflux_core.core.schemas.clients import ClientConfig
 from celery.signals import worker_process_init
 from django.apps import AppConfig
 
+from api.services.engine import AurafluxCoreService
+from api.agents.models import ModelProvider
 from .utils import get_provider_configs, set_global_client_manager
 
 logger = logging.getLogger(__name__)
@@ -15,6 +17,17 @@ class AgentsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'agents'
     label = 'agents'
+
+    def ready(self):
+        """
+        Initialize AurafluxCoreService on application startup.
+        """
+        try:
+            providers = list(ModelProvider.objects.values('id', 'name', '_encrypted_api_key'))
+            AurafluxCoreService().initialize(providers)
+            logger.info("AurafluxCoreService initialized on app ready.")
+        except Exception as e:
+            logger.error(f"Error initializing AurafluxCoreService: {e}")
 
 
 async def _async_initialize_client_manager():
