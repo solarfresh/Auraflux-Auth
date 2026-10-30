@@ -15,12 +15,10 @@ class AgentsConfig(AppConfig):
         """
         Initialize AurafluxEngineSingleton on application startup.
         """
-        from agents.models import ModelProvider
-        from services.engine import AurafluxEngineSingleton
+        from agents.utils import initialize_auraflux_engine
 
         try:
-            providers = list(ModelProvider.objects.all())
-            AurafluxEngineSingleton().initialize(providers=providers)
+            initialize_auraflux_engine()
             logger.info("AurafluxEngine initialized on app ready.")
         except Exception as e:
             logger.error(f"Error initializing AurafluxEngine: {e}")
@@ -29,10 +27,8 @@ class AgentsConfig(AppConfig):
 @worker_process_init.connect
 def initialize_resources(sender=None, **kwargs):
     """Initializes resources for Celery worker processes."""
-    from agents.models import ModelProvider
-    from services.engine import AurafluxEngineSingleton
+    from agents.utils import initialize_auraflux_engine
     try:
-        providers = list(ModelProvider.objects.all())
-        AurafluxEngineSingleton().initialize(providers=providers)
+        initialize_auraflux_engine()
     except Exception as e:
         logger.error(f"Error initializing AurafluxEngine in Celery worker: {e}")

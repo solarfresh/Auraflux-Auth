@@ -22,7 +22,7 @@ def test_happy_path_initialization():
     engine = AurafluxEngineSingleton()
     # The initialization expects providers as a list of dictionaries
     payload = engine.initialize([{'id': provider.id, 'name': provider.name, 'provider_type': 'openai', 'api_key': 'valid_key'}])
-
+    assert payload is not None
     assert payload['loaded_providers_count'] == 1
     assert payload['providers_status'][0]['status'] == "ACTIVE"
 
@@ -38,6 +38,7 @@ def test_decryption_error_isolation():
     payload = engine.initialize([{'id': provider.id, 'name': provider.name, 'provider_type': 'openai', 'api_key': 'DECRYPTION_ERROR_SIM'}])
 
     # Spec requires it to be DECRYPTION_ERROR.
+    assert payload is not None
     assert payload['providers_status'][0]['status'] == "DECRYPTION_ERROR"
 
 @pytest.mark.django_db
@@ -46,4 +47,27 @@ def test_empty_database_initialization():
     engine = AurafluxEngineSingleton()
     payload = engine.initialize([])
 
+    assert payload is not None
     assert payload['loaded_providers_count'] == 0
+
+@pytest.mark.django_db
+def test_engine_initialization_error():
+    from services.exceptions import EngineInitializationError
+    engine = AurafluxEngineSingleton()
+    # Reset state to force uninitialized
+    engine._initialized = False
+
+    with pytest.raises(EngineInitializationError):
+        # Accessing engine before initialization
+        _ = engine.engine
+
+@pytest.mark.django_db
+def test_invalid_provider_initialization():
+    from services.exceptions import EngineInitializationError
+    engine = AurafluxEngineSingleton()
+    # Reset state
+    engine._initialized = False
+
+    with pytest.raises(EngineInitializationError):
+        # Initializing with None providers should trigger error
+        engine.initialize(providers=None)

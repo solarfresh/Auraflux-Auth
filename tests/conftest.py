@@ -18,17 +18,16 @@ def pytest_configure(config):
         },
         'root': {'handlers': ['console'], 'level': 'INFO'},
     }
-    settings.configure()
+    if not settings.configured:
+        settings.configure()
 
 @pytest.fixture(autouse=True)
 def mock_infrastructure():
     # Mocking open for SIGNING_KEY, VERIFYING_KEY
     with patch("builtins.open", side_effect=lambda file, *args, **kwargs: MagicMock(read=lambda: "dummy-key-content") if not str(file).endswith('/dev/null') else open(file, *args, **kwargs)), \
-         patch("messaging.tasks.publish_event.delay") as mock_publish, \
-         patch("canvases.tasks.publish_event.delay") as mock_canvas_publish:
+         patch("messaging.tasks.publish_event.delay") as mock_publish:
         yield {
             "publish_event": mock_publish,
-            "canvas_publish": mock_canvas_publish
         }
 
 @pytest.fixture
