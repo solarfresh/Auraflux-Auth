@@ -5,11 +5,10 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import uuid4
 
 from asgiref.sync import async_to_sync
-from auraflux_core.agents import AGENT_REGISTRY, Agent
 from auraflux_core.core.clients.client_manager import ClientManager
-from auraflux_core.core.protocols.agents import AgentProtocol
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import ClientConfig, ProviderConfig
+from auraflux_core.core.schemas.embeddings import EmbeddingConfig
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.embeddings import EMBEDDING_REGISTRY
 from services.engine import AurafluxEngineSingleton
@@ -129,87 +128,53 @@ def get_agent_response(
         logger.error(f"Engine execution failed for agent role {agent_role}: {e}")
         raise e
 
-def get_embedding_instance(
-    embedding_name: str,
-    embedding_role: str,
-    parameters: Dict[str, Any],
-    **kwargs
-) -> Any:
-    """
-    Retrieves an instance of the specified embedding model client, along with its configuration.
-    """
-    try:
-        client_manager = get_client_manager()
-        if client_manager is None:
-            raise RuntimeError("ClientManager is not initialized.")
-
-        embedding_config = {
-            "name": embedding_name,
-            **parameters,
-            **kwargs,
-        }
-
-        embedding_registry = EMBEDDING_REGISTRY[embedding_role] if embedding_role in EMBEDDING_REGISTRY else EMBEDDING_REGISTRY['default']
-        if not embedding_registry:
-            raise KeyError(f"No embedding registry found for role '{embedding_role}'.")
-
-        instance = embedding_registry.embedding_class(
-            config=embedding_registry.config_class(**embedding_config),
-            client_manager=client_manager
-        )
-
-        return instance
-
-    except Exception as e:
-        logger.critical(
-            "Failed to create embedding instance '%s' for role '%s': %s", embedding_name, embedding_role, str(e)
-        )
-        raise e
-
 def get_embedding_response(
     embedding_name: str,
     embedding_role: str,
     parameters: Dict[str, Any] | None = None,
     input_text: Union[str, List[str]] | None = None,
-    use_batch: bool = True,  # Strategy flag to toggle batch processing
+    use_batch: bool = False,
     **kwargs
 ) -> Union[List[float], List[List[float]]]:
     """
-    Generates embedding vectors for either a single query string or a batch of text documents.
+    Generates embedding vectors using AurafluxEngine.
     """
     if not input_text:
         raise ValueError("input_text must be provided and cannot be empty.")
 
-    embedding_instance = get_embedding_instance(
-        embedding_name=embedding_name,
-        embedding_role=embedding_role,
-        parameters=parameters or {},
-        **kwargs
-    )
-
     try:
-        if isinstance(input_text, str):
-            return async_to_sync(embedding_instance.embed_query)(text=input_text)
+        engine = get_auraflux_engine()
+        embedding_config = EmbeddingConfig(
+            name=embedding_name,
+            provider=kwargs.get('provider', 'default'),
+            model=kwargs.get('model', 'default'),
+            parameters=parameters or {},
+            **kwargs
+        )
 
-        if isinstance(input_text, list):
-            if use_batch:
-                try:
-                    return async_to_sync(embedding_instance.embed_documents)(texts=input_text)
-                except Exception as batch_err:
-                    logger.warning(
-                        f"Batch embedding failed ({str(batch_err)}). "
-                        "Falling back to sequential single-query processing."
-                    )
+        payload = {
+            "input_text": input_text,
+            "use_batch": use_batch or isinstance(input_text, list)
+        }
 
-            embeddings = []
-            for text in input_text:
-                vec = async_to_sync(embedding_instance.embed_query)(text=text)
-                embeddings.append(vec)
-            return embeddings
+        response = async_to_sync(engine.execute_embedding)(
+            embedding_type=embedding_role,
+            payload=payload,
+            config=embedding_config
+        )
+
+        if response.get('status') == 'success':
+            result = response.get('result')
+            if result is None:
+                raise ValueError("Engine returned success but result is None.")
+            return result
+        else:
+            raise RuntimeError(f"Engine execution failed: {response.get('error')}")
 
     except Exception as e:
         logger.error(
-            "Failed to generate embedding for instance '%s' with role '%s': %s", embedding_name, embedding_role, str(e)
+            "Failed to generate embedding for instance '%s' with role '%s': %s",
+            embedding_name, embedding_role, str(e)
         )
         raise e
 
