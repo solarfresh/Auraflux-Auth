@@ -92,7 +92,7 @@ LOGGING = {
         'logfile': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/auraflux/logs/default.log',
+            'filename': os.environ.get('LOG_FILE_PATH', '/auraflux/logs/default.log'),
             'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',
@@ -227,8 +227,8 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': False,
     'ALGORITHM': 'RS256',
-    'SIGNING_KEY': open(os.environ.get('SIGNING_KEY_PATH', '')).read(),
-    'VERIFYING_KEY': open(os.environ.get('VERIFYING_KEY_PATH', '')).read(),
+    'SIGNING_KEY': open(os.environ.get('SIGNING_KEY_PATH', '/dev/null')).read() if os.environ.get('SIGNING_KEY_PATH') else 'dummy-key',
+    'VERIFYING_KEY': open(os.environ.get('VERIFYING_KEY_PATH', '/dev/null')).read() if os.environ.get('VERIFYING_KEY_PATH') else 'dummy-key',
     'AUTH_COOKIE': 'jwt_access', # Name of the cookie for the access token
     'AUTH_COOKIE_REFRESH': 'jwt_refresh', # Name of the cookie for the refresh token
     'AUTH_COOKIE_DOMAIN': None, # Set to your domain in production (e.g., '.your-domain.com')
