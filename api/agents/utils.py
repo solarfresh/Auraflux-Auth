@@ -76,89 +76,48 @@ def compose_prompt(
         return None
 
 def get_agent_response(
-    agent_name: str,
-    agent_role: str,
-    system_prompt: str,
-    llm_parameters: Dict,
-    agent_input_data: Dict[str, Any],
-    prompt_template: str,
-    template_variables: Dict[str, Any],
-    prompt_text=None,
-    output_format: Literal['TEXT', 'JSON'] = 'TEXT',
+    type: str,
+    config: Dict[str, Any],
+    payload: Dict[str, Any],
     **kwargs
 ) -> Any:
     """
-    Retrieves the agent response using the AurafluxEngine.
+    Retrieves the agent response using the AurafluxEngine with standardized unified contract.
+    Decoupled via name, type, config, payload unpacking provider, model, and system_prompt.
     """
-    if prompt_text is None and agent_input_data is None:
-        raise ValueError("Either prompt_text or agent_input_data must be provided.")
-
-    if prompt_text is not None:
-        prompt = prompt_text
-    elif agent_input_data is not None:
-        prompt = compose_prompt(agent_input_data, prompt_template, template_variables)
-    else:
-        raise ValueError("Unable to compose prompt: insufficient data provided.")
 
     try:
         engine = get_auraflux_engine()
 
-        # Preparing config and payload as per contract (task-01-contract-spec.md)
-        agent_config = AgentConfig(
-            name=agent_name,
-            provider=llm_parameters.get('provider', 'openai'),
-            model=llm_parameters.get('model', 'gpt-4'),
-            output_format=output_format,
-            **llm_parameters
-        )
-
-        payload = {
-            "messages": [Message(role="user", content=prompt, name='User')],
-        }
-
-        # execute_agent signature: (agent_type: str, payload: Dict[str, Any], config: AgentConfig)
+        agent_config = AgentConfig(**config)
         response = async_to_sync(engine.execute_agent)(
-            agent_type=agent_role,
+            agent_type=type,
             payload=payload,
             config=agent_config
         )
 
         return response.get('result')
     except Exception as e:
-        logger.error(f"Engine execution failed for agent role {agent_role}: {e}")
+        logger.error(f"Engine execution failed for agent type {type}: {e}")
         raise e
 
 def get_embedding_response(
-    embedding_name: str,
-    embedding_role: str,
-    parameters: Dict[str, Any] | None = None,
-    input_text: Union[str, List[str]] | None = None,
-    use_batch: bool = False,
+    name: str,
+    type: str,
+    config: Dict[str, Any],
+    payload: Dict[str, Any],
     **kwargs
 ) -> Union[List[float], List[List[float]]]:
     """
-    Generates embedding vectors using AurafluxEngine.
+    Generates embedding vectors using AurafluxEngine with standardized unified contract.
+    Decoupled via name, type, config, payload unpacking provider and model.
     """
-    if not input_text:
-        raise ValueError("input_text must be provided and cannot be empty.")
 
     try:
         engine = get_auraflux_engine()
-        embedding_config = EmbeddingConfig(
-            name=embedding_name,
-            provider=kwargs.get('provider', 'default'),
-            model=kwargs.get('model', 'default'),
-            parameters=parameters or {},
-            **kwargs
-        )
-
-        payload = {
-            "input_text": input_text,
-            "use_batch": use_batch or isinstance(input_text, list)
-        }
-
+        embedding_config = EmbeddingConfig(**config)
         response = async_to_sync(engine.execute_embedding)(
-            embedding_type=embedding_role,
+            embedding_type=type,
             payload=payload,
             config=embedding_config
         )
@@ -173,8 +132,8 @@ def get_embedding_response(
 
     except Exception as e:
         logger.error(
-            "Failed to generate embedding for instance '%s' with role '%s': %s",
-            embedding_name, embedding_role, str(e)
+            "Failed to generate embedding for instance '%s' with type '%s': %s",
+            name, type, str(e)
         )
         raise e
 

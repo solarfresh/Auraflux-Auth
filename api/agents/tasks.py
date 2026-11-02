@@ -18,22 +18,15 @@ def handle_agent_request(event_type: str, payload: dict):
     """
     Generic consumer task for handling agent requests.
 
-    This task is designed to be flexible and reusable for any agent defined in the system. It takes in a payload that specifies which agent to execute, the input data for that agent, and optionally the format of the output and the next event to publish.
     Args:
-        payload: A dictionary containing the necessary information to execute the agent, including:
-            - provider_id: The ID of the model provider to use for the agent.
-            - agent_name: The name of the agent instance.
-            - agent_role: The role of the agent (e.g., 'assistant', 'researcher
-            - system_prompt: The system prompt to initialize the agent with.
-            - llm_parameters: Parameters for configuring the LLM.
-            - agent_input_data: Data to be used for composing the prompt.
-            - prompt_template: Template string for the prompt, with placeholders for variables.
-            - template_variables: Mapping of variable names to their corresponding values for prompt rendering.
-            - prompt_text: Direct prompt text to send to the agent.
-            - tool_args_map: Optional mapping of tool names to their arguments for dynamic tool configuration.
-            - next_event_type: Optional event type to publish after obtaining the agent's response.
-            - next_event_queue: Optional queue name for the next event.
-            - output_format: The desired format of the agent's output ('json' or 'text').
+        event_type: The type of event being handled.
+        payload: A dictionary containing execution parameters, aligned with the unified agent contract:
+            - type: The agent type identifier.
+            - config: Agent configuration dictionary (e.g., system_prompt, llm_parameters).
+            - payload: Execution payload including agent_input_data, prompt_template, etc.
+            - next_event_type: Optional event to publish after agent execution.
+            - next_event_payload: Base dictionary for the next event payload.
+            - next_event_queue: Queue name for the next event.
     """
 
     task_id = handle_agent_request.request.id
@@ -72,16 +65,13 @@ def handle_embedding_request(event_type: str, payload: dict):
 
     Args:
         event_type: The type of event being handled.
-        payload: A dictionary containing execution parameters, including:
-            - provider_id: The ID of the model provider to acquire concurrency slots.
-            - provider: The provider name (e.g., 'openai', 'gemini').
-            - model: The target embedding model identifier.
-            - embedding_name: Display name or identifier for the configuration.
-            - input_text: Single string or list of strings to generate embeddings for.
-            - parameters: Optional runtime model parameters.
-            - next_event_type: Optional event type to publish after generating embeddings.
-            - next_event_payload: Optional base dictionary for the next event payload.
-            - next_event_queue: Optional queue name for the next event.
+        payload: A dictionary containing execution parameters, aligned with the unified embedding contract:
+            - type: The embedding type identifier.
+            - config: Embedding configuration dictionary (e.g., model, parameters).
+            - payload: Execution payload including input_text, etc.
+            - next_event_type: Optional event to publish after generating embeddings.
+            - next_event_payload: Base dictionary for the next event payload.
+            - next_event_queue: Queue name for the next event.
     """
     task_id = handle_embedding_request.request.id
     provider_id = payload.get('provider_id', None)
