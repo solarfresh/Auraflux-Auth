@@ -30,22 +30,22 @@ def handle_agent_request(event_type: str, payload: dict):
     """
 
     task_id = handle_agent_request.request.id
-    provider_id = payload.get('provider_id', None)
-    agent_role = payload.get('agent_role', 'unknown')
+    config = payload.get('config', {})
     next_event_type = payload.get('next_event_type', None)
     next_event_payload = payload.get('next_event_payload', {})
     next_event_queue = payload.get('next_event_queue', None)
+    provider_id = config.get('provider', None)
 
     if provider_id is None:
         raise ValueError("Provider ID is required in the payload.")
 
-    logger.info("Task %s: Handling agent request for agent role %s.", task_id, agent_role)
+    logger.info("Task %s: Handling agent request for agent type %s.", task_id, payload.get('type', 'unknown'))
 
     try:
         with acquire_concurrency_slot(key_prefix=provider_id, max_concurrency=1, timeout=60):
             agent_output = get_agent_response(**payload)
     except Exception:
-        logger.critical("Task %s: Agent execution failed for agent role %s.", task_id, agent_role)
+        logger.critical("Task %s: Agent execution failed for agent type %s.", task_id, payload.get('type', 'unknown'))
         agent_output = None
 
     if next_event_type and next_event_type is not None:

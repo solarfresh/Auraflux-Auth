@@ -1,7 +1,7 @@
 import logging
+import os
 from typing import Iterable, Optional
 
-from asgiref.sync import async_to_sync
 # Auraflux engine imports
 from auraflux_core.core.schemas.clients import ClientConfig, ProviderConfig
 from auraflux_core.core.schemas.engine import EngineConfig
@@ -23,23 +23,25 @@ class AurafluxEngineSingleton:
             cls._instance = super(AurafluxEngineSingleton, cls).__new__(cls)
             cls._instance._initialized = False
             cls._instance._engine = None
+            cls._instance._pid = None
         return cls._instance
 
-    def initialize(self, providers: Optional[Iterable] = None):
+    async def initialize(self, providers: Optional[Iterable] = None, force_reinit: bool = False):
         """
         Initialize the engine: load providers, decrypt credentials, and start the engine.
         Decoupled from ModelProvider model.
         """
+        current_pid = os.getpid()
 
         # Reset initialized state if we are passing new providers (for testing)
         if providers is not None:
             self._initialized = False
 
-        if self._initialized:
-            logger.info("AurafluxEngine is already initialized.")
+        if not force_reinit and self._initialized and self._pid == current_pid:
+            logger.info(f"AurafluxEngine is already initialized in pid {current_pid}.")
             return None
 
-        logger.info("Initializing AurafluxEngine...")
+        logger.info(f"Initializing AurafluxEngine in pid {current_pid}...")
 
         if providers is None:
             raise EngineInitializationError("No providers provided for initialization.")
@@ -91,10 +93,11 @@ class AurafluxEngineSingleton:
 
         # Start the engine
         try:
-            config = EngineConfig(client_config=ClientConfig(providers=provider_configs))
+            config = EngineConfig(client_config=ClientConfig(providers=provider_configs, initialize_mode='run_forever'))
             self._engine = AurafluxEngine(config=config)
-            async_to_sync(self._engine.initialize)()
+            await self._engine.initialize()
             self._initialized = True
+            self._pid = current_pid
             logger.info(f"AurafluxEngine initialized with {len(provider_configs)} providers.")
         except Exception as e:
             logger.error(f"Critical error during engine initialization: {e}")
@@ -108,6 +111,14 @@ class AurafluxEngineSingleton:
 
     @property
     def engine(self):
-        if not self._initialized:
+        if not self._initialized or self._pid != os.getpid():
             raise EngineInitializationError("Engine not initialized.")
         return self._engine
+
+    @property
+    def initialized(self):
+        return self._initialized
+
+    @property
+    def pid(self):
+        return self._pid
