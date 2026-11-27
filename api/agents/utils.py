@@ -1,10 +1,12 @@
 import logging
+import os
 import time
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import uuid4
 
 from asgiref.sync import async_to_sync
+from auraflux_core.agents import AGENT_REGISTRY
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import ClientConfig, ProviderConfig
@@ -19,24 +21,40 @@ logger = logging.getLogger(__name__)
 _INIT_LOCK = Lock()
 _LAST_INIT_ATTEMPT = 0.0
 
+def _reset_after_fork_in_child(**kwargs):
+    global _LAST_INIT_ATTEMPT, _INIT_LOCK
+    _LAST_INIT_ATTEMPT = 0.0
+    _INIT_LOCK = Lock()
+
+os.register_at_fork(after_in_child=_reset_after_fork_in_child)
+
 def initialize_auraflux_engine():
     """Initializes the singleton engine using all available ModelProviders."""
-    global _LAST_INIT_ATTEMPT
+    global _LAST_INIT_ATTEMPT, _INIT_LOCK
+    current_pid = os.getpid()
+
     with _INIT_LOCK:
-        if time.time() - _LAST_INIT_ATTEMPT < 5.0:
+        singleton = AurafluxEngineSingleton()
+        now = time.time()
+
+        if singleton.initialized and singleton.pid == current_pid:
+            return singleton.engine
+
+        if now - _LAST_INIT_ATTEMPT < 5.0:
             raise EngineInitializationError("Engine initialization attempted too frequently. Please wait before retrying.")
 
-        _LAST_INIT_ATTEMPT = time.time()
+        _LAST_INIT_ATTEMPT = now
 
         from agents.models import ModelProvider
         providers = list(ModelProvider.objects.all())
-        AurafluxEngineSingleton().initialize(providers=providers)
+        async_to_sync(singleton.initialize)(providers=providers)
 
-        return AurafluxEngineSingleton().engine
+        return singleton.engine
 
 def get_auraflux_engine():
     try:
-        return AurafluxEngineSingleton().engine
+        singleton = AurafluxEngineSingleton()
+        return singleton.engine
     except EngineInitializationError:
         return initialize_auraflux_engine()
 
@@ -85,13 +103,15 @@ def get_agent_response(
     Retrieves the agent response using the AurafluxEngine with standardized unified contract.
     Decoupled via name, type, config, payload unpacking provider, model, and system_prompt.
     """
+    agent_type = type if type else 'default'
 
     try:
         engine = get_auraflux_engine()
 
-        agent_config = AgentConfig(**config)
+        AgentConfigClass = AGENT_REGISTRY[agent_type].config_class
+        agent_config = AgentConfigClass(**config)
         response = async_to_sync(engine.execute_agent)(
-            agent_type=type,
+            agent_type=agent_type,
             payload=payload,
             config=agent_config
         )
